@@ -20,11 +20,11 @@ alias runwebserver="webserver; kill3001; pnpm run start:dev"
 alias webui="hos; cd ui"
 alias runwebui="webui; kill3000; pnpm run start --host"
 
-# show timestamp in terminal
+# show timestamp in terminal prompt
 export PROMPT_COMMAND="echo -n \[\$(date +%r)\]\ "
 
-# show branch name in Ubuntu terminal
+# show branch name in terminal prompt, this should be at the end of file
 parse_git_branch() {
      git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'
 }
-export PS1="\u@\h \[\033[32m\]\w\[\033[33m\]\[\033[00m\] $ "
+export PS1="\u@\h \[\033[32m\]\w\[\033[33m\]\$(parse_git_branch)\[\033[00m\] $ "
