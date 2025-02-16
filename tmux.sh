@@ -52,3 +52,10 @@ set -g status-right "#[fg=colour200]#(cat /sys/class/power_supply/BAT1/capacity)
 
 
 
+
+
+
+
+
+
+
