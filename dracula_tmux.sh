@@ -78,6 +78,3 @@ dark_purple='#373b41'
 
 # Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
  run '~/.tmux/plugins/tpm/tpm'
-
-                                                                                                                                                                                             101,21        94%
-                                                                                                                                         31,38         Top
