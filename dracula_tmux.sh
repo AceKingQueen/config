@@ -1,6 +1,9 @@
 # rename prefix key
 set -g prefix C-s
 
+# ask for a name when making a new window
+bind-key c command-prompt -p "what are we calling it?:" "new-window; rename-window '%%'"
+
 # reload config file (change file location to your the tmux.conf you want to use)
 unbind r
 bind r source-file ~/.tmux.conf \; display "Reloaded!"
@@ -36,45 +39,60 @@ set -g @plugin 'tmux-plugins/tmux-sensible'
 set -g @plugin 'tmux-plugins/tmux-yank'
 set -g @plugin 'dracula/tmux'
 
+## dracula
 set -g @dracula-plugins "ssh-session git battery playerctl time"
 set -g @dracula-border-contrast true
 set -g @dracula-show-empty-plugins false
 
+# set -g @dracula-[plugin-name]-colors "[background] [foreground]"
+
 set -g @dracula-show-powerline true
 
-set -g @dracula-show-left-icon "≡ƒîè"
+set -g @dracula-show-left-icon "🌊"
 
 set -g @dracula-git-disable-status true
 set -g @dracula-git-no-repo-message ""
 set -g @dracula-git-show-remote-status true
+set -g @dracula-git-colors "green white"
 
 # set -g @dracula-mpc-format "%title% - %artist%"
-set -g @dracula-playerctl-format "Γû║  {{ artist }} - {{ title }}"
+set -g @dracula-playerctl-format "►  {{ artist }} - {{ title }}"
 
-set -g @dracula-network-wifi-label "≡ƒ¢£"
+set -g @dracula-network-wifi-label "🛜"
 
 set -g @dracula-show-ssh-session-port true
 set -g @dracula-show-ssh-only-when-connected true
+set -g @dracula-ssh-session-colors "green white"
+
 
 set -g @dracula-show-location false
 
-set -g @dracula-time-format "%a %b %d ≡ƒÅÇ %I:%M %p"
+set -g @dracula-battery-colors "blue white"
 
-# simple tomorrow night color palette
+
+set -g @dracula-time-format "%a %b %d 🏀 %I:%M %p"
+set -g @dracula-time-colors "yellow dark_gray"
+
 set -g @dracula-colors "
-pink='#D33682'
-orange='#de935f'
-yellow='#B58900'
-green='#859900'
-cyan='#2AA198'
-blue='268BD2'
-light_purple='#b294ba'
-white='#EEE8D5'
-dark_gray='#363a41'
-red='#D92B2B'
-gray='#839496'
-dark_purple='#373b41'
+# tomorrow night eighties
+foreground='#bf267a'
+background='#ffffff'
+highlight='#d6d6d6'
+status_line='#efefef'
+comment='#8e908c'
+red='#c82829'
+orange='#f5871f'
+yellow='#eab700'
+green='#718c00'
+aqua='#3e999f'
+blue='#4271ae'
+purple='#8959a8'
+pane='#efefef'
 "
 
 # Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
  run '~/.tmux/plugins/tpm/tpm'
+
+
+
+
