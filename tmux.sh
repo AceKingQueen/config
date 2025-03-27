@@ -1,9 +1,12 @@
 # rename prefix key
 set -g prefix C-s
 
+# ask for a name when making a new window
+bind-key c command-prompt -p "what are we calling it?:" "new-window; rename-window '%%'"
+
 # reload config file (change file location to your the tmux.conf you want to use)
 unbind r
-bind r source-file ~/.tmux.conf \; display "Reloaded!"
+bind r source-file ~/.tmux.conf \ display "Reloaded!"
 
 # split panes using | and -
 bind | split-window -h
@@ -28,33 +31,59 @@ setw -g monitor-activity off
 set -g bell-action none
 
 # copy mode
-setw -g mode-keys vi
+setw -g mode-style 'fg=white bg=purple'
 
-# status bar
-set -g status-bg black
-set -g status-fg white
+# List of plugins
+set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-sensible'
+set -g @plugin 'tmux-plugins/tmux-yank'
+set -g @plugin 'dracula/tmux'
 
-set -g status-interval 1
-set -g status-position top
+## dracula
+# set colors for each plugin "[background] [foreground]"
+set -g @dracula-plugins "ssh-session git battery time"
+set -g @dracula-border-contrast true
+set -g @dracula-show-empty-plugins false
 
-set -g status-left '#[fg=colour40]🌿 #(cd #{pane_current_path}; git rev-parse --abbrev-ref HEAD)'
-set -g status-left-length 50
+set -g @dracula-show-powerline true
 
-set -g status-justify centre 
+set -g @dracula-show-left-icon "🌊"
 
-set -g status-right "#[fg=colour200]#(cat /sys/class/power_supply/BAT1/capacity)\%🔋 %a %b %d 🏀 %I:%M %p "
+set -g @dracula-git-disable-status true
+set -g @dracula-git-no-repo-message ""
+set -g @dracula-git-show-remote-status true
+set -g @dracula-git-colors "green white"
 
+set -g @dracula-show-ssh-session-port true
+set -g @dracula-show-ssh-only-when-connected true
+set -g @dracula-ssh-session-colors "green white"
 
-# set -g status-left "#{pane_current_path}"
-# set -g status-left "#(ifconfig eth1 | grep 'inet' | awk 'NR==1 {print $2}')#[bg=yellow fg=yellow]#[bg=yellow fg=black,bold]#S #[bg=yellow fg=#000000]"
+set -g @dracula-show-location false
 
+set -g @dracula-battery-colors "blue white"
 
+set -g @dracula-time-format "%a %b %d 🏀 %I:%M %p"
+set -g @dracula-time-colors "yellow dark_gray"
 
+set -g @dracula-colors "
+# tomorrow night eighties
+foreground='#bf267a'
+background='#ffffff'
+highlight='#d6d6d6'
+status_line='#efefef'
+comment='#8e908c'
+red='#c82829'
+orange='#f5871f'
+yellow='#eab700'
+green='#718c00'
+aqua='#3e999f'
+blue='#4271ae'
+purple='#8959a8'
+pane='#efefef'
+"
 
-
-
-
-
+# Initialize TMUX plugin manager (keep this line at the very bottom of tmux.conf)
+ run '~/.tmux/plugins/tpm/tpm'
 
 
 
