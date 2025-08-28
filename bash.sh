@@ -8,6 +8,7 @@ alias glog='git log'
 # vms
 alias ssh="ssh hybridos@172.16.1.90"
 alias sshvm2="powershell.exe; ssh hybridos@172.16.1.91"
+alias pshell="powershell.exe"
 
 # HybridOS
 alias hos="cd ~/git/hybridos/web_apps/packages/hybridos"
@@ -27,4 +28,4 @@ export PROMPT_COMMAND="echo -n \[\$(date +%r)\]\ "
 parse_git_branch() {
      git branch 2> /dev/null | sed -e '/^[^*]/d' -e 's/* \(.*\)/ (\1)/'
 }
-export PS1="\u@\h \[\033[32m\]\w\[\033[33m\]\$(parse_git_branch)\[\033[00m\] $ "
+export PS1='\[\e[35m\]\u@\h \[\033[32m\]\w\[\033[33m\]\[\033[00m\] $ '
