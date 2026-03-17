@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PR="${1:-}"
+BASE_BRANCH="${2:-origin/main}"
+
+if [[ -z "$PR" ]]; then
+  echo "Usage: review-pr <PR_NUMBER> [BASE_BRANCH]"
+  echo "Example: review-pr 3039 origin/main"
+  exit 1
+fi
+
+# Workspace
+OUT_DIR="/tmp/pr-${PR}-review"
+ZIP_FILE="/tmp/pr-${PR}-review.zip"
+
+mkdir -p "$OUT_DIR"
+
+echo "🔎 Fetching PR metadata..."
+gh pr view "$PR" --json number,title,body,baseRefName,headRefName,author,url,createdAt >"${OUT_DIR}/pr-info.json"
+
+echo "📌 Exporting PR diff..."
+gh pr diff "$PR" >"${OUT_DIR}/pr.patch"
+
+echo "📄 Exporting changed file list..."
+gh pr view "$PR" --json files --jq '.files[].path' >"${OUT_DIR}/changed-files.txt"
+
+echo "🧾 Checking out PR locally..."
+gh pr checkout "$PR" >/dev/null
+
+echo "🧠 Capturing file contents for context..."
+mkdir -p "${OUT_DIR}/files"
+while IFS= read -r f; do
+  # Skip deleted/renamed-away files safely
+  if [[ -f "$f" ]]; then
+    mkdir -p "${OUT_DIR}/files/$(dirname "$f")"
+    cp "$f" "${OUT_DIR}/files/$f"
+  else
+    echo "⚠️ Skipping missing file (probably deleted): $f" >>"${OUT_DIR}/files-missing.txt"
+  fi
+done <"${OUT_DIR}/changed-files.txt"
+
+echo "📦 Creating zip bundle..."
+rm -f "$ZIP_FILE"
+(cd "$(dirname "$OUT_DIR")" && zip -qr "$(basename "$ZIP_FILE")" "$(basename "$OUT_DIR")")
+
+echo ""
+echo "✅ Done!"
+echo "Upload this file to the AI of your choice:"
+echo "  $ZIP_FILE"
+echo ""
+echo "Contents included:"
+echo "  - pr-info.json (title/body/meta)"
+echo "  - pr.patch (diff)"
+echo "  - changed-files.txt"
+echo "  - files/ (full contents of changed files)"

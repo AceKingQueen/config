@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+# pre-pr-check — run from anywhere inside the unified app before opening a PR
+# Compares current branch against dev and flags common issues
+
+set -euo pipefail
+
+BASE_BRANCH="${1:-dev}"
+PASS=true
+
+# Colors
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+info()  { echo -e "${BOLD}$1${RESET}"; }
+warn()  { echo -e "${YELLOW}⚠️  $1${RESET}"; PASS=false; }
+ok()    { echo -e "${GREEN}✅ $1${RESET}"; }
+error() { echo -e "${RED}❌  $1${RESET}"; PASS=false; }
+
+echo ""
+info "🔍 Pre-PR Check — comparing against ${BASE_BRANCH}"
+echo "────────────────────────────────────────"
+
+# Resolve repo root
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "Not a git repo."; exit 1; }
+
+# Changed files vs base branch
+CHANGED_FILES=$(git diff --name-only "${BASE_BRANCH}...HEAD" 2>/dev/null)
+CHANGED_TSX=$(echo "$CHANGED_FILES" | grep -E 'app/.*\.(tsx)$' || true)
+CHANGED_SERVER=$(echo "$CHANGED_FILES" | grep -E 'server/.*\.(ts)$' || true)
+CHANGED_TS=$(echo "$CHANGED_FILES" | grep -E '\.(ts|tsx)$' || true)
+
+# ── 1. data-testid coverage ────────────────────────────────────────────────
+echo ""
+info "1. data-testid coverage"
+
+if [ -z "$CHANGED_TSX" ]; then
+  ok "No changed .tsx files"
+else
+  MISSING_TESTID=()
+  while IFS= read -r file; do
+    FULL_PATH="${REPO_ROOT}/${file}"
+    [ -f "$FULL_PATH" ] || continue
+    # Look for JSX elements that commonly need test IDs but don't have one nearby
+    # Flags <button, <input, <select, <textarea that lack data-testid on the same line
+    if grep -qE '<(button|input|select|textarea)' "$FULL_PATH"; then
+      LINES=$(grep -nE '<(button|input|select|textarea)' "$FULL_PATH" | grep -v 'data-testid' || true)
+      if [ -n "$LINES" ]; then
+        MISSING_TESTID+=("$file")
+        echo -e "  ${YELLOW}$file${RESET}"
+        echo "$LINES" | while IFS= read -r line; do
+          echo "    line $line"
+        done
+      fi
+    fi
+  done <<< "$CHANGED_TSX"
+
+  if [ ${#MISSING_TESTID[@]} -eq 0 ]; then
+    ok "data-testid looks covered"
+  else
+    warn "Some elements may be missing data-testid (check above)"
+  fi
+fi
+
+# ── 2. console.log left in ────────────────────────────────────────────────
+echo ""
+info "2. console.log statements"
+
+if [ -n "$CHANGED_TS" ]; then
+  CONSOLE_HITS=""
+  while IFS= read -r file; do
+    FULL_PATH="${REPO_ROOT}/${file}"
+    [ -f "$FULL_PATH" ] || continue
+    HITS=$(grep -n 'console\.log' "$FULL_PATH" || true)
+    if [ -n "$HITS" ]; then
+      CONSOLE_HITS="${CONSOLE_HITS}\n  ${file}:\n$(echo "$HITS" | sed 's/^/    /')"
+    fi
+  done <<< "$CHANGED_TS"
+
+  if [ -z "$CONSOLE_HITS" ]; then
+    ok "No console.log found"
+  else
+    warn "console.log found — remove before merging:"
+    echo -e "$CONSOLE_HITS"
+  fi
+else
+  ok "No changed .ts/.tsx files"
+fi
+
+# ── 3. TODO / FIXME comments ─────────────────────────────────────────────
+echo ""
+info "3. TODO / FIXME comments"
+
+if [ -n "$CHANGED_TS" ]; then
+  TODO_HITS=""
+  while IFS= read -r file; do
+    FULL_PATH="${REPO_ROOT}/${file}"
+    [ -f "$FULL_PATH" ] || continue
+    HITS=$(grep -nE '(TODO|FIXME|HACK|XXX)' "$FULL_PATH" || true)
+    if [ -n "$HITS" ]; then
+      TODO_HITS="${TODO_HITS}\n  ${file}:\n$(echo "$HITS" | sed 's/^/    /')"
+    fi
+  done <<< "$CHANGED_TS"
+
+  if [ -z "$TODO_HITS" ]; then
+    ok "No TODO/FIXME found"
+  else
+    warn "TODO/FIXME comments present — intentional?"
+    echo -e "$TODO_HITS"
+  fi
+else
+  ok "No changed .ts/.tsx files"
+fi
+
+# ── 4. try/catch on server routes ─────────────────────────────────────────
+echo ""
+info "4. Error handling in server routes"
+
+if [ -z "$CHANGED_SERVER" ]; then
+  ok "No changed server files"
+else
+  MISSING_TRYCATCH=()
+  while IFS= read -r file; do
+    FULL_PATH="${REPO_ROOT}/${file}"
+    [ -f "$FULL_PATH" ] || continue
+    # Flag router handlers (router.get/post/put/delete) that don't have try/catch anywhere in the file
+    if grep -qE 'router\.(get|post|put|delete|patch)' "$FULL_PATH"; then
+      if ! grep -q 'try {' "$FULL_PATH"; then
+        MISSING_TRYCATCH+=("$file")
+        error "No try/catch found in server route: $file"
+      fi
+    fi
+  done <<< "$CHANGED_SERVER"
+
+  if [ ${#MISSING_TRYCATCH[@]} -eq 0 ]; then
+    ok "Server routes have error handling"
+  fi
+fi
+
+# ── 5. `any` type usage ───────────────────────────────────────────────────
+echo ""
+info "5. TypeScript 'any' usage"
+
+if [ -n "$CHANGED_TS" ]; then
+  ANY_HITS=""
+  while IFS= read -r file; do
+    FULL_PATH="${REPO_ROOT}/${file}"
+    [ -f "$FULL_PATH" ] || continue
+    # Exclude test files and intentional `any` in type assertions
+    HITS=$(grep -n ': any' "$FULL_PATH" | grep -v '// eslint-disable' || true)
+    if [ -n "$HITS" ]; then
+      ANY_HITS="${ANY_HITS}\n  ${file}:\n$(echo "$HITS" | sed 's/^/    /')"
+    fi
+  done <<< "$CHANGED_TS"
+
+  if [ -z "$ANY_HITS" ]; then
+    ok "No 'any' types found"
+  else
+    warn "Explicit 'any' types found — worth tightening up:"
+    echo -e "$ANY_HITS"
+  fi
+else
+  ok "No changed .ts/.tsx files"
+fi
+
+# ── 6. Reminder checklist ─────────────────────────────────────────────────
+echo ""
+info "6. Manual reminders"
+echo "  - Run pnpm run typecheck"
+echo "  - Checked component lib before using raw HTML elements?"
+echo "  - vfakeco smoke test done?"
+echo "  - Any Analyze-side branch needs to be merged/deployed first?"
+
+# ── Summary ───────────────────────────────────────────────────────────────
+echo ""
+echo "────────────────────────────────────────"
+if [ "$PASS" = true ]; then
+  echo -e "${GREEN}${BOLD}✅ All checks passed — looking good!${RESET}"
+else
+  echo -e "${YELLOW}${BOLD}⚠️  Some items need attention above.${RESET}"
+fi
+echo ""
