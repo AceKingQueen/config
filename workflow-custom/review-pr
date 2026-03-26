@@ -3,54 +3,76 @@ set -euo pipefail
 
 PR="${1:-}"
 BASE_BRANCH="${2:-origin/main}"
+MODEL="${3:-claude}"
 
 if [[ -z "$PR" ]]; then
-  echo "Usage: review-pr <PR_NUMBER> [BASE_BRANCH]"
-  echo "Example: review-pr 3039 origin/main"
+  echo "Usage: review-pr <PR_NUMBER> [BASE_BRANCH] [MODEL]"
+  echo "Example: review-pr 3039 origin/main claude"
   exit 1
 fi
 
 # Workspace
-OUT_DIR="/tmp/pr-${PR}-review"
-ZIP_FILE="/tmp/pr-${PR}-review.zip"
+OUT_DIR="$HOME/Documents/reviews/pr-${PR}-review"
+OUT_FILE="$HOME/Documents/reviews/pr-${PR}-review.md"
 
 mkdir -p "$OUT_DIR"
 
-echo "🔎 Fetching PR metadata..."
+echo "Fetching PR metadata..."
 gh pr view "$PR" --json number,title,body,baseRefName,headRefName,author,url,createdAt >"${OUT_DIR}/pr-info.json"
 
-echo "📌 Exporting PR diff..."
+echo "👯 Exporting PR diff..."
 gh pr diff "$PR" >"${OUT_DIR}/pr.patch"
 
-echo "📄 Exporting changed file list..."
+echo "Exporting changed file list..."
 gh pr view "$PR" --json files --jq '.files[].path' >"${OUT_DIR}/changed-files.txt"
 
-echo "🧾 Checking out PR locally..."
+echo "🌳 Checking out PR locally..."
 gh pr checkout "$PR" >/dev/null
 
-echo "🧠 Capturing file contents for context..."
-mkdir -p "${OUT_DIR}/files"
+echo "Capturing file contents for context..."
 while IFS= read -r f; do
-  # Skip deleted/renamed-away files safely
-  if [[ -f "$f" ]]; then
-    mkdir -p "${OUT_DIR}/files/$(dirname "$f")"
-    cp "$f" "${OUT_DIR}/files/$f"
-  else
+  if [[ ! -f "$f" ]]; then
     echo "⚠️ Skipping missing file (probably deleted): $f" >>"${OUT_DIR}/files-missing.txt"
   fi
 done <"${OUT_DIR}/changed-files.txt"
 
-echo "📦 Creating zip bundle..."
-rm -f "$ZIP_FILE"
-(cd "$(dirname "$OUT_DIR")" && zip -qr "$(basename "$ZIP_FILE")" "$(basename "$OUT_DIR")")
+echo "👷🏻 Building review bundle..."
+{
+  echo "=== PR INFO ==="
+  cat "${OUT_DIR}/pr-info.json"
+  echo ""
+  echo ""
+
+  echo "=== PR DESCRIPTION ==="
+  gh pr view "$PR" --json body --jq '.body'
+  echo ""
+  echo ""
+
+  echo "=== DIFF ==="
+  cat "${OUT_DIR}/pr.patch"
+  echo ""
+  echo ""
+
+  while IFS= read -r f; do
+    if [[ -f "$f" ]]; then
+      echo "=== FILE: $f ==="
+      cat "$f"
+      echo ""
+      echo ""
+    fi
+  done <"${OUT_DIR}/changed-files.txt"
+} >"$OUT_FILE"
+
+rm -rf "$OUT_DIR"
 
 echo ""
-echo "✅ Done!"
-echo "Upload this file to the AI of your choice:"
-echo "  $ZIP_FILE"
+echo "💫 Done! Paste this into a prompt:"
 echo ""
-echo "Contents included:"
-echo "  - pr-info.json (title/body/meta)"
-echo "  - pr.patch (diff)"
-echo "  - changed-files.txt"
-echo "  - files/ (full contents of changed files)"
+echo "Review this PR as a senior full stack engineer. Read the file at: $OUT_FILE"
+echo ""
+echo "Write your review as a markdown document, saved to $HOME/Documents/reviews/pr-${PR}-${MODEL}-feedback.md."
+echo "For every item include the file path and line number. Use these sections:"
+echo "- 🚨 Critical Issues"
+echo "- ⚠️ Warnings"
+echo "- 💡 Nice to Haves"
+echo "- ✅ Looks Good"
