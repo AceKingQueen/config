@@ -38,6 +38,11 @@ gh pr view "$PR" --json files --jq '.files[].path' >"${OUT_DIR}/changed-files.tx
 echo "🌳 Checking out PR locally..."
 gh pr checkout "$PR" >/dev/null
 
+# gh emits repo-root-relative paths (e.g. web_apps/apps/...), but the capture
+# loops below test `-f "$f"` against the CWD. Without this, running review-pr
+# from a subdirectory silently skips every file and the bundle is diff-only.
+cd "$(git rev-parse --show-toplevel)"
+
 echo "Capturing file contents for context..."
 while IFS= read -r f; do
   if [[ ! -f "$f" ]]; then
