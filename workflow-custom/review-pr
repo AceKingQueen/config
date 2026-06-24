@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PR="${1:-}"
-BASE_BRANCH="${2:-origin/main}"
-MODEL="${3:-claude}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=pr-resolve.sh
+source "$SCRIPT_DIR/pr-resolve.sh"
 
-if [[ -z "$PR" ]]; then
-  echo "Usage: review-pr <PR_NUMBER> [BASE_BRANCH] [MODEL]"
-  echo "Example: review-pr 3039 origin/main claude"
+INPUT="${1:-}"
+BASE_BRANCH="${2:-origin/main}"
+
+if [[ -z "$INPUT" ]]; then
+  echo "Usage: review-pr <PR_NUMBER | BRANCH | TICKET> [BASE_BRANCH]"
+  echo "Examples:"
+  echo "  review-pr 3039"
+  echo "  review-pr UH-235"
+  echo "  review-pr feat/auth-gateway-permissions-integration"
   exit 1
 fi
+
+PR="$(resolve_pr "$INPUT")" || exit 1
+[[ "$INPUT" != "$PR" ]] && echo "🔎 Resolved '$INPUT' → PR #$PR"
 
 # Workspace
 OUT_DIR="$HOME/Documents/reviews/pr-${PR}-review"
@@ -66,14 +75,20 @@ echo "👷🏻 Building review bundle..."
 rm -rf "$OUT_DIR"
 
 echo ""
-echo "💫 Done! Paste this into a prompt:"
+echo "💫 Done! Paste this same prompt into BOTH Claude and Codex:"
 echo ""
+echo "---------------------------------------------------------------"
 echo "Review this PR as a senior full stack engineer. Read the file at: $OUT_FILE"
 echo ""
-echo "Write your review as a markdown document, saved to"
-echo "$HOME/Documents/reviews/pr-${PR}-${MODEL}-feedback.md."
+echo "Save your review as a markdown document to one of these paths,"
+echo "depending on which assistant you are:"
+echo "  • $HOME/Documents/reviews/pr-${PR}-claude-feedback.md   ← if you are Claude"
+echo "  • $HOME/Documents/reviews/pr-${PR}-codex-feedback.md    ← if you are Codex"
 echo "For every item include the file path and line number. Use these sections:"
 echo "- 🚨 Critical Issues"
 echo "- ⚠️ Warnings"
 echo "- 💡 Nice to Haves"
 echo "- ✅ Looks Good"
+echo "---------------------------------------------------------------"
+echo ""
+echo "👉 Next: run \`cross-review-pr ${PR}\` once both feedback files exist."

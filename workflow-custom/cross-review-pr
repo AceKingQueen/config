@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=pr-resolve.sh
+source "$SCRIPT_DIR/pr-resolve.sh"
+
+INPUT="${1:-}"
+
+if [[ -z "$INPUT" ]]; then
+  echo "Usage: cross-review-pr <PR_NUMBER | BRANCH | TICKET>"
+  echo "Example: cross-review-pr 3039"
+  echo ""
+  echo "Run AFTER \`review-pr <PR>\` and after both Claude and Codex have saved their"
+  echo "Phase 1 feedback files."
+  exit 1
+fi
+
+PR="$(resolve_pr "$INPUT")" || exit 1
+[[ "$INPUT" != "$PR" ]] && echo "🔎 Resolved '$INPUT' → PR #$PR"
+
+REVIEWS="$HOME/Documents/reviews"
+BUNDLE="$REVIEWS/pr-${PR}-review.md"
+CLAUDE_FB="$REVIEWS/pr-${PR}-claude-feedback.md"
+CODEX_FB="$REVIEWS/pr-${PR}-codex-feedback.md"
+
+CLAUDE_ON_CODEX="$REVIEWS/pr-${PR}-claude-on-codex.md"
+CODEX_ON_CLAUDE="$REVIEWS/pr-${PR}-codex-on-claude.md"
+COMBINED="$REVIEWS/pr-${PR}-combined.md"
+
+# --- Gate: Phase 1 outputs must exist ---------------------------------------
+missing=0
+for f in "$BUNDLE" "$CLAUDE_FB" "$CODEX_FB"; do
+  if [[ ! -f "$f" ]]; then
+    echo "❌ Missing: $f"
+    missing=1
+  fi
+done
+if [[ "$missing" -ne 0 ]]; then
+  echo ""
+  echo "Phase 1 isn't complete. Make sure you've run \`review-pr ${PR}\` and that BOTH"
+  echo "Claude and Codex have saved their feedback files. Then re-run this."
+  exit 1
+fi
+
+echo "✅ Phase 1 files found. Below are the prompts for Phase 2 (cross-review) and"
+echo "   Phase 3 (synthesis). Run them in order."
+echo ""
+
+# --- Phase 2: Claude verifies Codex -----------------------------------------
+echo "==============================================================="
+echo "[PHASE 2 — paste into CLAUDE]"
+echo "==============================================================="
+echo "You are Claude. You previously reviewed this PR. Now cross-review Codex's review."
+echo ""
+echo "Read all three files:"
+echo "  • Your review:    $CLAUDE_FB"
+echo "  • Codex's review: $CODEX_FB"
+echo "  • Code bundle:    $BUNDLE"
+echo ""
+echo "For EACH of Codex's findings, verify it against the code in the bundle and tag it:"
+echo "  [verified]            — confirmed correct by reading the code"
+echo "  [needs runtime check] — plausible but depends on running services"
+echo "  [refuted]             — false positive; explain why, cite file:line"
+echo "Be skeptical: try to refute before you agree. Then add any real issue Codex missed"
+echo "(or that you now realize you both missed), and note any severity disagreements."
+echo ""
+echo "Save to: $CLAUDE_ON_CODEX"
+echo "Sections: 🚨 Critical Issues / ⚠️ Warnings / 💡 Nice to Haves / ✅ Looks Good"
+echo ""
+
+# --- Phase 2: Codex verifies Claude -----------------------------------------
+echo "==============================================================="
+echo "[PHASE 2 — paste into CODEX]"
+echo "==============================================================="
+echo "You are Codex. You previously reviewed this PR. Now cross-review Claude's review."
+echo ""
+echo "Read all three files:"
+echo "  • Your review:     $CODEX_FB"
+echo "  • Claude's review: $CLAUDE_FB"
+echo "  • Code bundle:     $BUNDLE"
+echo ""
+echo "For EACH of Claude's findings, verify it against the code in the bundle and tag it:"
+echo "  [verified]            — confirmed correct by reading the code"
+echo "  [needs runtime check] — plausible but depends on running services"
+echo "  [refuted]             — false positive; explain why, cite file:line"
+echo "Be skeptical: try to refute before you agree. Then add any real issue Claude missed"
+echo "(or that you now realize you both missed), and note any severity disagreements."
+echo ""
+echo "Save to: $CODEX_ON_CLAUDE"
+echo "Sections: 🚨 Critical Issues / ⚠️ Warnings / 💡 Nice to Haves / ✅ Looks Good"
+echo ""
+
+# --- Phase 3: Claude synthesizes --------------------------------------------
+echo "==============================================================="
+echo "[PHASE 3 — paste into CLAUDE]  ⚠️ RUN ONLY after BOTH cross-reviews above are saved"
+echo "==============================================================="
+echo "You are Claude. Synthesize ONE combined review from all five documents below."
+echo ""
+echo "Read all five files:"
+echo "  • Claude's review:        $CLAUDE_FB"
+echo "  • Codex's review:         $CODEX_FB"
+echo "  • Claude-on-Codex:        $CLAUDE_ON_CODEX"
+echo "  • Codex-on-Claude:        $CODEX_ON_CLAUDE"
+echo "  • Code bundle:            $BUNDLE"
+echo ""
+echo "Merge and dedupe every finding into a single review. Carry forward the verification"
+echo "tags ([verified] / [needs runtime check]). DROP any item a cross-review marked"
+echo "[refuted] — UNLESS you disagree, in which case keep it and note the dispute."
+echo "Order items by severity. Open with a 'Merge-blocker summary' numbered list of the"
+echo "must-fix-first items. Add a short header block (PR #, ticket link if present in the"
+echo "bundle, and a 'Sources: merged from Claude + Codex reviews and cross-reviews' line)."
+echo ""
+echo "Save to: $COMBINED"
+echo "Sections: 🚨 Critical Issues / ⚠️ Warnings / 💡 Nice to Haves / ✅ Looks Good"
+echo ""
+echo "==============================================================="
+echo "🏁 Final deliverable: $COMBINED"
